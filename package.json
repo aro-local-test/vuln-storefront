@@ -1,0 +1,15 @@
+{
+  "name": "vuln-storefront",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Storefront front door service",
+  "scripts": {
+    "start": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6",
+    "tsx": "^4.7.0"
+  }
+}
