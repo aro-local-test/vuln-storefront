@@ -1,4 +1,4 @@
-# Full scan with native SARIF output.
+# Real scan: full exploitation + native SARIF output.
 exploit: "true"
 report:
   sarif: "true"
