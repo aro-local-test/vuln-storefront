@@ -1,4 +1,2 @@
-# Full scan with native SARIF output.
+# Smoke: no report.sarif (pipeline-testing produces no findings to emit).
 exploit: "true"
-report:
-  sarif: "true"
