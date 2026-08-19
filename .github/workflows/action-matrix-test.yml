@@ -1,0 +1,46 @@
+name: Action input matrix test
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  matrix:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: missing-config-maxscope
+            config-path: .shannon/DOES-NOT-EXIST.yml
+            upload-sarif: "true"
+            model: ""
+          - name: upload-sarif-off
+            config-path: .shannon/ci.yml
+            upload-sarif: "false"
+            model: ""
+          - name: model-explicit
+            config-path: .shannon/ci.yml
+            upload-sarif: "true"
+            model: "anthropic:claude-sonnet-4-6"
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        uses: aro-local-test/shannon-action@v1
+        with:
+          api-key: ${{ secrets.SHANNON_AI_API_KEY }}
+          target-url: https://shannon-vuln-storefront-demo.fly.dev
+          config-path: ${{ matrix.config-path }}
+          upload-sarif: ${{ matrix.upload-sarif }}
+          model: ${{ matrix.model }}
+          fail-on: none
+          pipeline-testing: true
+      - name: Assert outputs wired
+        run: |
+          echo "result=${{ steps.scan.outputs.result }}"
+          echo "findings-count=${{ steps.scan.outputs.findings-count }}"
+          echo "blocking-count=${{ steps.scan.outputs.blocking-count }}"
+          echo "highest-severity=${{ steps.scan.outputs.highest-severity }}"
+          test "${{ steps.scan.outputs.result }}" = "completed"
