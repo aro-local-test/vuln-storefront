@@ -40,3 +40,4 @@ jobs:
           config-path: .shannon/ci.yml
           fail-on: none
           comment-pr: true
+          pipeline-testing: true
