@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { CATALOG, page } from '../lib/state';
+import { CATALOG, page, esc } from '../lib/state';
 
 const router = Router();
 
@@ -13,11 +13,11 @@ router.get('/search', (req: Request, res: Response) => {
   const rows = hits.map((p) => `<li>${p.name} &mdash; $${p.price}</li>`).join('');
   const body =
     '<h2>Results for ' +
-    q +
+    esc(q) +
     '</h2><p>' +
     hits.length +
     ' items matched the term "' +
-    q +
+    esc(q) +
     '".</p><ul>' +
     rows +
     '</ul>';

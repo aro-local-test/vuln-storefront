@@ -8,8 +8,8 @@ DB_PATH = os.environ.get("STOREFRONT_DB", "/tmp/storefront.db")
 
 def fetch_orders_by_region(region):
     conn = connect()
-    query = "SELECT id, region, total FROM orders WHERE region = '" + region + "'"
-    rows = conn.execute(query).fetchall()
+    query = "SELECT id, region, total FROM orders WHERE region = ?"
+    rows = conn.execute(query, (region,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

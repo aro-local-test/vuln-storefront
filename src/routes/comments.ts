@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { COMMENTS, page } from '../lib/state';
+import { COMMENTS, page, esc } from '../lib/state';
 
 const router = Router();
 
 router.get('/comments', (_req: Request, res: Response) => {
   const items = COMMENTS.map(
-    (c) => '<li><b>' + c.author + '</b>: ' + c.body + '</li>',
+    (c) => '<li><b>' + esc(c.author) + '</b>: ' + esc(c.body) + '</li>',
   ).join('');
   const form =
     '<form method="POST" action="/comments">' +

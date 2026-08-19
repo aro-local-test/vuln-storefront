@@ -19,6 +19,19 @@ router.get('/account', (req: Request, res: Response) => {
 });
 
 router.post('/account/email', (req: Request, res: Response) => {
+  const origin = req.get('origin');
+  if (origin) {
+    let originHost = 'invalid';
+    try {
+      originHost = new URL(origin).host;
+    } catch {
+      originHost = 'invalid';
+    }
+    if (originHost !== req.get('host')) {
+      res.status(403).json({ error: 'cross-origin request blocked' });
+      return;
+    }
+  }
   const uid = currentUser(req);
   const email = String(req.body.email || '');
   ACCOUNTS[uid] = { email, plan: ACCOUNTS[uid]?.plan || 'basic' };

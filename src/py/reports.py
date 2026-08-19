@@ -30,10 +30,14 @@ def reports():
 def revenue():
     region = request.args.get("region", "eu")
     order_by = request.args.get("sort", "total")
+    allowed_sort = {"total", "revenue", "region"}
+    if order_by not in allowed_sort:
+        order_by = "total"
     conn = connect()
-    sql = "SELECT region, SUM(total) AS revenue FROM orders WHERE region = '{}' GROUP BY region ORDER BY {}".format(
-        region, order_by
+    sql = (
+        "SELECT region, SUM(total) AS revenue FROM orders "
+        "WHERE region = ? GROUP BY region ORDER BY " + order_by
     )
-    rows = conn.execute(sql).fetchall()
+    rows = conn.execute(sql, (region,)).fetchall()
     conn.close()
-    return jsonify({"sql": sql, "rows": [dict(r) for r in rows]})
+    return jsonify({"rows": [dict(r) for r in rows]})

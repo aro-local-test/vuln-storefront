@@ -5,6 +5,8 @@ const router = Router();
 
 function deepMerge(dst: any, src: any): any {
   for (const key in src) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    if (!Object.prototype.hasOwnProperty.call(src, key)) continue;
     const value = src[key];
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       if (!dst[key] || typeof dst[key] !== 'object') {
