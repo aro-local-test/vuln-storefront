@@ -1,0 +1,4 @@
+# Full scan with native SARIF output.
+exploit: "true"
+report:
+  sarif: "true"
