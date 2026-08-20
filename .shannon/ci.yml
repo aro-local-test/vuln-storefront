@@ -2,3 +2,24 @@
 exploit: "true"
 report:
   sarif: "true"
+
+# This scan runs in an ephemeral CI runner: no inbound network, no out-of-band
+# collaborator, one short-lived target. Steer exploitation away from techniques
+# that cannot succeed here so a hardened app is cleared quickly instead of the
+# agents grinding the clock on impossible confirmations.
+rules_of_engagement: |
+  You are running inside an ephemeral CI runner with no inbound network and no
+  out-of-band collaborator server. Exploit efficiently and do not spend time on
+  techniques that cannot work in this environment:
+  - Do NOT stand up out-of-band callback infrastructure (external HTTP
+    listeners, reverse shells, tunnels such as ngrok or localtunnel, DNS or
+    HTTP collaborators). If confirming a candidate requires an out-of-band
+    callback and none is reachable, confirm it by source-code analysis instead,
+    or mark it blocked/unconfirmed and move on. Do not retry callback setup.
+  - Do NOT perform credential brute-forcing or large password-guessing loops.
+    If you cannot authenticate with provided or clearly-observed credentials,
+    mark the finding blocked and move on.
+  - Prefer static/code-analysis confirmation over live exploitation whenever the
+    required live infrastructure is unavailable. Time-box each candidate: once
+    you reach a definitive blocked or false-positive conclusion, stop and move
+    to the next one rather than retrying the same approach.
