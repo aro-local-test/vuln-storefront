@@ -8,6 +8,7 @@ import imageProxyRouter from './routes/imageProxy';
 import settingsRouter from './routes/settings';
 import redirectRouter from './routes/redirect';
 import accountRouter from './routes/account';
+import { verifySession } from './lib/session';
 
 const app = express();
 
@@ -19,8 +20,18 @@ const ORDERS_API = process.env.ORDERS_API || 'http://orders-api:8000';
 const PAYMENTS_SVC = process.env.PAYMENTS_SVC || 'http://payments-svc:9000';
 const REPORTS_SVC = process.env.REPORTS_SVC || 'http://127.0.0.1:5000';
 
+// Internal and financial services require an authenticated, non-forgeable session.
+function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  if (!verifySession(req.cookies?.session_user)) {
+    res.status(401).json({ error: 'authentication required' });
+    return;
+  }
+  next();
+}
+
 app.use(
   '/api/orders',
+  requireAuth,
   createProxyMiddleware({
     target: ORDERS_API,
     changeOrigin: true,
@@ -30,6 +41,7 @@ app.use(
 
 app.use(
   '/api/pay',
+  requireAuth,
   createProxyMiddleware({
     target: PAYMENTS_SVC,
     changeOrigin: true,
@@ -37,7 +49,7 @@ app.use(
   }),
 );
 
-app.use('/reports', createProxyMiddleware({ target: REPORTS_SVC, changeOrigin: true }));
+app.use('/reports', requireAuth, createProxyMiddleware({ target: REPORTS_SVC, changeOrigin: true }));
 
 app.use(searchRouter);
 app.use(commentsRouter);

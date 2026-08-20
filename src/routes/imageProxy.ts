@@ -6,13 +6,21 @@ import net from 'net';
 
 const router = Router();
 
-function isBlockedAddress(ip: string): boolean {
+function normalizeIp(ip: string): string {
+  // IPv4-mapped IPv6 (for example ::ffff:127.0.0.1) collapses to its IPv4 form for range checks.
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
+  return mapped ? mapped[1] : ip;
+}
+
+function isBlockedAddress(rawIp: string): boolean {
+  const ip = normalizeIp(rawIp);
   if (net.isIPv4(ip)) {
     const [a, b] = ip.split('.').map(Number);
     if (a === 0 || a === 10 || a === 127) return true;
     if (a === 169 && b === 254) return true; // link-local and cloud metadata
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true; // private
+    if (a === 192 && b === 168) return true; // private
+    if (a === 100 && b >= 64 && b <= 127) return true; // carrier-grade NAT (Fly.io internals)
     return false;
   }
   const low = ip.toLowerCase();
@@ -38,6 +46,7 @@ router.get('/image-proxy', async (req: Request, res: Response) => {
     return;
   }
 
+  // Resolve every address the host maps to and reject if ANY is internal.
   let resolved;
   try {
     resolved = await dns.lookup(parsed.hostname, { all: true });
@@ -45,13 +54,24 @@ router.get('/image-proxy', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'host resolution failed' });
     return;
   }
-  if (resolved.some((a) => isBlockedAddress(a.address))) {
+  if (resolved.length === 0 || resolved.some((a) => isBlockedAddress(a.address))) {
     res.status(403).json({ error: 'destination host is not allowed' });
     return;
   }
 
+  // Pin the connection to the address we just validated. Without this, DNS rebinding between the
+  // check above and the request below could redirect the fetch to an internal host.
+  const pinned = resolved[0];
+  const pinnedLookup = (
+    _hostname: string,
+    _options: unknown,
+    cb: (err: Error | null, address: string, family: number) => void,
+  ): void => {
+    cb(null, pinned.address, pinned.family);
+  };
+
   const client = parsed.protocol === 'https:' ? https : http;
-  const upstream = client.get(target, (r) => {
+  const upstream = client.get(target, { lookup: pinnedLookup } as http.RequestOptions, (r) => {
     res.status(r.statusCode || 502);
     res.setHeader('content-type', r.headers['content-type'] || 'application/octet-stream');
     r.pipe(res);
