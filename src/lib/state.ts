@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 export interface Product {
   id: number;
   name: string;
@@ -8,6 +10,13 @@ export interface Comment {
   id: number;
   author: string;
   body: string;
+}
+
+export interface Account {
+  email: string;
+  plan: string;
+  role: string;
+  passwordHash: string;
 }
 
 export const CATALOG: Product[] = [
@@ -25,8 +34,17 @@ export const SITE_SETTINGS: Record<string, unknown> = {
   pageSize: 20,
 };
 
-export const ACCOUNTS: Record<string, { email: string; plan: string }> = {
-  'user-1': { email: 'shopper@example.com', plan: 'basic' },
+// Passwords come from the environment (for example fly secrets), never from source. When a
+// variable is unset we fall back to a random per-process value, so there is no guessable or
+// committed credential for an attacker to recover.
+function seedPasswordHash(envVar: string): string {
+  const password = process.env[envVar] || crypto.randomBytes(24).toString('hex');
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+export const ACCOUNTS: Record<string, Account> = {
+  'user-1': { email: 'shopper@example.com', plan: 'basic', role: 'user', passwordHash: seedPasswordHash('STOREFRONT_USER1_PASSWORD') },
+  admin: { email: 'admin@example.com', plan: 'pro', role: 'admin', passwordHash: seedPasswordHash('STOREFRONT_ADMIN_PASSWORD') },
 };
 
 export function esc(value: string): string {

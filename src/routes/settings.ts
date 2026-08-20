@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { SITE_SETTINGS } from '../lib/state';
+import { requireAdmin } from '../lib/auth';
 
 const router = Router();
 
@@ -24,7 +25,8 @@ router.get('/settings', (_req: Request, res: Response) => {
   res.json(SITE_SETTINGS);
 });
 
-router.post('/settings', (req: Request, res: Response) => {
+// Mutating global settings is an administrative action.
+router.post('/settings', requireAdmin, (req: Request, res: Response) => {
   const patch = req.body || {};
   deepMerge(SITE_SETTINGS, patch);
   res.json({ ok: true, settings: SITE_SETTINGS });
