@@ -39,3 +39,4 @@ jobs:
           target-url: ${{ steps.deploy.outputs.url }}
           config-path: .shannon/ci.yml
           fail-on: high
+          scan-timeout-minutes: 350
