@@ -72,8 +72,24 @@ router.get('/image-proxy', async (req: Request, res: Response) => {
 
   const client = parsed.protocol === 'https:' ? https : http;
   const upstream = client.get(target, { lookup: pinnedLookup } as http.RequestOptions, (r) => {
-    res.status(r.statusCode || 502);
-    res.setHeader('content-type', r.headers['content-type'] || 'application/octet-stream');
+    const status = r.statusCode || 502;
+    // Do not follow or stream redirects: a 3xx could point back at an internal host and the
+    // redirect target is not re-validated.
+    if (status >= 300 && status < 400) {
+      r.resume();
+      res.status(502).json({ error: 'upstream redirect not allowed' });
+      return;
+    }
+    // Only proxy image responses, so this endpoint cannot be used as a general-purpose fetch or
+    // anonymizing proxy for arbitrary content.
+    const contentType = String(r.headers['content-type'] || '');
+    if (!contentType.startsWith('image/')) {
+      r.resume();
+      res.status(415).json({ error: 'only image responses are proxied' });
+      return;
+    }
+    res.status(status);
+    res.setHeader('content-type', contentType);
     r.pipe(res);
   });
 
