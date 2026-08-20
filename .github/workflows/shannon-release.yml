@@ -13,25 +13,36 @@ jobs:
   release-scan:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    env:
+      FLY_ORG: keygraph-634
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Deploy this tag to fly.io
+
+      - name: Deploy this tag to a fresh fly app
         id: deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          flyctl deploy --remote-only --app shannon-vuln-storefront-demo
-          echo "url=https://shannon-vuln-storefront-demo.fly.dev" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          APP="shannon-vs-${GITHUB_RUN_ID}"
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
+          echo "url=https://$APP.fly.dev" >> "$GITHUB_OUTPUT"
+          flyctl apps create "$APP" --org "$FLY_ORG"
+          # fly.toml builds this repo's Dockerfile; --app targets this run's fresh app.
+          flyctl deploy --remote-only --config fly.toml --app "$APP" --ha=false --yes
+
       - name: Wait for the deployment to be reachable
         run: |
-          for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' https://shannon-vuln-storefront-demo.fly.dev/ || echo 000)
+          URL="${{ steps.deploy.outputs.url }}"
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/" || echo 000)
             echo "attempt $i: HTTP $code"
             case "$code" in 2*|3*|4*) echo "reachable"; exit 0 ;; esac
             sleep 5
           done
           echo "target did not become reachable in time"; exit 1
+
       - name: Shannon release gate (fail on high)
         uses: aro-local-test/shannon-action@v1
         with:
@@ -40,3 +51,9 @@ jobs:
           config-path: .shannon/ci.yml
           fail-on: high
           scan-timeout-minutes: 350
+
+      - name: Destroy the per-run fly app
+        if: always()
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl apps destroy "${{ steps.deploy.outputs.app }}" --yes || true
