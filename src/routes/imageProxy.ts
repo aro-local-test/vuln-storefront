@@ -80,16 +80,20 @@ router.get('/image-proxy', async (req: Request, res: Response) => {
       res.status(502).json({ error: 'upstream redirect not allowed' });
       return;
     }
-    // Only proxy image responses, so this endpoint cannot be used as a general-purpose fetch or
-    // anonymizing proxy for arbitrary content.
-    const contentType = String(r.headers['content-type'] || '');
-    if (!contentType.startsWith('image/')) {
+    // Only proxy raster image responses. image/svg+xml can carry scripts and is rendered as a
+    // document when navigated to directly, so forwarding it would be an XSS vector; it (and any
+    // non-image content) is rejected. nosniff stops the browser from re-interpreting the bytes.
+    const contentType = String(r.headers['content-type'] || '').toLowerCase();
+    const base = contentType.split(';')[0].trim();
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp', 'image/x-icon', 'image/vnd.microsoft.icon'];
+    if (!allowedTypes.includes(base)) {
       r.resume();
-      res.status(415).json({ error: 'only image responses are proxied' });
+      res.status(415).json({ error: 'only raster image responses are proxied' });
       return;
     }
     res.status(status);
-    res.setHeader('content-type', contentType);
+    res.setHeader('content-type', base);
+    res.setHeader('x-content-type-options', 'nosniff');
     r.pipe(res);
   });
 

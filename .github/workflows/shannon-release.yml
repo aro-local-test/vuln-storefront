@@ -12,7 +12,7 @@ concurrency:
 jobs:
   release-scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 180
     env:
       FLY_ORG: keygraph-634
     steps:
@@ -50,7 +50,7 @@ jobs:
           target-url: ${{ steps.deploy.outputs.url }}
           config-path: .shannon/ci.yml
           fail-on: high
-          scan-timeout-minutes: 350
+          scan-timeout-minutes: 150
 
       - name: Destroy the per-run fly app
         if: always()
