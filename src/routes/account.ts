@@ -42,6 +42,17 @@ function isSameOrigin(req: Request): boolean {
   }
 }
 
+router.get('/login', (_req: Request, res: Response) => {
+  const form =
+    '<form method="POST" action="/login">' +
+    '<input name="user" placeholder="user">' +
+    '<input name="password" type="password" placeholder="password">' +
+    '<button type="submit">Log in</button>' +
+    '</form>';
+  res.type('html');
+  res.send(page('Login', '<h2>Sign in</h2>' + form));
+});
+
 router.post('/login', (req: Request, res: Response) => {
   if (loginRateLimited(req.ip || 'unknown')) {
     res.status(429).json({ error: 'too many attempts, try again later' });
