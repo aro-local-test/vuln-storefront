@@ -1,0 +1,95 @@
+name: Shannon scan - VAmPI (vulnerable REST API)
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  security-events: write
+concurrency:
+  group: shannon-vampi-${{ github.run_id }}
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 195
+    env:
+      FLY_ORG: keygraph-634
+    steps:
+      # Whitebox: check out VAmPI source; the deployed target below is the matching prebuilt image.
+      - name: Check out VAmPI source
+        uses: actions/checkout@v4
+        with:
+          repository: erev0s/VAmPI
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Write fly.toml (prebuilt image) and Shannon config
+        run: |
+          cat > fly.toml <<'EOF'
+          app = "placeholder"
+          primary_region = "iad"
+          [build]
+            image = "erev0s/vampi:latest"
+          [http_service]
+            internal_port = 5000
+            force_https = true
+            auto_stop_machines = "off"
+            min_machines_running = 1
+          [[vm]]
+            size = "shared-cpu-1x"
+            memory = "512mb"
+          EOF
+          mkdir -p .shannon
+          cat > .shannon/ci.yml <<'EOF'
+          exploit: "true"
+          report:
+            sarif: "true"
+          rules_of_engagement: |
+            This runs in an ephemeral CI runner with no inbound network and no
+            out-of-band collaborator. Do not spend time on techniques that cannot
+            work here:
+            - Do not set up out-of-band callbacks (external listeners, tunnels,
+              DNS/HTTP collaborators). If a candidate needs one and none is reachable,
+              confirm it from source code or mark it blocked and move on.
+            - Do not brute-force credentials or run large password-guessing loops.
+            - Prefer code analysis over live exploitation when infrastructure is
+              unavailable. Time-box each candidate; once blocked or false-positive, move on.
+          EOF
+
+      - name: Deploy VAmPI to a fresh fly app
+        id: deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          APP="shannon-vampi-${GITHUB_RUN_ID}"
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
+          echo "url=https://$APP.fly.dev" >> "$GITHUB_OUTPUT"
+          flyctl apps create "$APP" --org "$FLY_ORG"
+          flyctl deploy --config fly.toml --app "$APP" --ha=false --yes
+
+      - name: Wait for the deployment, then initialise the DB
+        run: |
+          URL="${{ steps.deploy.outputs.url }}"
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/" || echo 000)
+            echo "attempt $i: HTTP $code"
+            case "$code" in 2*|3*|4*) echo "reachable"; break ;; esac
+            sleep 5
+          done
+          # VAmPI needs its DB created/populated before endpoints return data.
+          echo "createdb: $(curl -s "$URL/createdb" || echo failed)"
+
+      - name: Shannon gate (fail on high)
+        uses: aro-local-test/shannon-action@v1
+        with:
+          api-key: ${{ secrets.SHANNON_AI_API_KEY }}
+          target-url: ${{ steps.deploy.outputs.url }}
+          config-path: .shannon/ci.yml
+          fail-on: high
+          scan-timeout-minutes: 170
+
+      - name: Destroy the per-run fly app
+        if: always()
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl apps destroy "${{ steps.deploy.outputs.app }}" --yes || true
