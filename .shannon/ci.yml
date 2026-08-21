@@ -1,22 +1,4 @@
-# Real scan: full exploitation + native SARIF output.
-exploit: "true"
+# exploit:false variant: deterministic findings-renderer path (no LLM exploitation).
+exploit: "false"
 report:
-  sarif: "true"
-
-# Steer exploitation away from techniques that cannot succeed in an ephemeral CI
-# runner, so a hardened app is cleared quickly instead of the agents grinding the
-# clock on impossible confirmations. Kept under the 1000-char rules_of_engagement cap.
-rules_of_engagement: |
-  This runs in an ephemeral CI runner with no inbound network and no
-  out-of-band collaborator. Do not spend time on techniques that cannot
-  work here:
-  - Do not set up out-of-band callbacks (external listeners, tunnels,
-    DNS/HTTP collaborators). If a candidate needs one and none is reachable,
-    confirm it from source code or mark it blocked and move on; do not retry
-    callback setup.
-  - Do not brute-force credentials or run large password-guessing loops. If
-    you cannot log in with provided or observed credentials, mark it blocked
-    and move on.
-  - Prefer code analysis over live exploitation when the needed infrastructure
-    is unavailable. Time-box each candidate; once you reach a blocked or
-    false-positive verdict, stop and move on.
+  sarif: "false"
