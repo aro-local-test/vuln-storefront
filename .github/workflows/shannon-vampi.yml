@@ -14,7 +14,8 @@ jobs:
     env:
       FLY_ORG: keygraph-634
     steps:
-      # Whitebox: check out VAmPI source; the deployed target below is the matching prebuilt image.
+      # Exact whitebox: check out VAmPI source AND build the deployed target from that same source
+      # (its Dockerfile), so the code Shannon analyzes IS the running binary.
       - name: Check out VAmPI source
         uses: actions/checkout@v4
         with:
@@ -22,13 +23,13 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Write fly.toml (prebuilt image) and Shannon config
+      - name: Write fly.toml (build from checked-out source) and Shannon config
         run: |
           cat > fly.toml <<'EOF'
           app = "placeholder"
           primary_region = "iad"
           [build]
-            image = "erev0s/vampi:latest"
+            dockerfile = "Dockerfile"
           [http_service]
             internal_port = 5000
             force_https = true
@@ -55,7 +56,7 @@ jobs:
               unavailable. Time-box each candidate; once blocked or false-positive, move on.
           EOF
 
-      - name: Deploy VAmPI to a fresh fly app
+      - name: Build & deploy VAmPI (from source) to a fresh fly app
         id: deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -65,7 +66,8 @@ jobs:
           echo "app=$APP" >> "$GITHUB_OUTPUT"
           echo "url=https://$APP.fly.dev" >> "$GITHUB_OUTPUT"
           flyctl apps create "$APP" --org "$FLY_ORG"
-          flyctl deploy --config fly.toml --app "$APP" --ha=false --yes
+          # Builds the checked-out Dockerfile on Fly's remote builder -> deployed binary == analyzed source.
+          flyctl deploy --remote-only --config fly.toml --app "$APP" --ha=false --yes
 
       - name: Wait for the deployment, then initialise the DB
         run: |
