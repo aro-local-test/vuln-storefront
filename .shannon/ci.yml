@@ -1,4 +1,4 @@
-# Real scan: full exploitation + native SARIF output.
-exploit: "true"
+# exploit:false on the vulnerable app: deterministic findings-renderer path, no LLM exploitation.
+exploit: "false"
 report:
-  sarif: "true"
+  sarif: "false"
