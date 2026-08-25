@@ -1,0 +1,110 @@
+name: Shannon (ezl action) - clean Node app (green test)
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  security-events: write
+concurrency:
+  group: shannon-ezl-cleannode-${{ github.run_id }}
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      FLY_ORG: keygraph-634
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Generate a minimal secure Node app + Dockerfile + config
+        run: |
+          mkdir -p app
+          cat > app/server.js <<'JS'
+          const http = require('http');
+          const { URL } = require('url');
+          const PRODUCTS = [{ id: 1, name: 'Widget', price: 10 }, { id: 2, name: 'Gadget', price: 20 }];
+          const server = http.createServer((req, res) => {
+            const u = new URL(req.url, 'http://localhost');
+            const send = (code, body, ctype = 'application/json') => {
+              res.writeHead(code, {
+                'Content-Type': ctype,
+                'X-Content-Type-Options': 'nosniff',
+                'Content-Security-Policy': "default-src 'none'",
+                'X-Frame-Options': 'DENY',
+              });
+              res.end(body);
+            };
+            if (u.pathname === '/health') return send(200, JSON.stringify({ ok: true }));
+            if (u.pathname === '/products') return send(200, JSON.stringify(PRODUCTS));
+            if (u.pathname.startsWith('/products/')) {
+              const id = Number(u.pathname.split('/')[2]);
+              if (!Number.isInteger(id)) return send(400, JSON.stringify({ error: 'bad id' }));
+              const p = PRODUCTS.find((x) => x.id === id);
+              if (!p) return send(404, JSON.stringify({ error: 'not found' }));
+              return send(200, JSON.stringify(p));
+            }
+            send(200, '<h1>Clean Store</h1><ul><li><a href="/products">products</a></li></ul>', 'text/html');
+          });
+          server.listen(3000, () => console.log('listening on 3000'));
+          JS
+          cat > Dockerfile <<'DOCKER'
+          FROM node:20-slim
+          WORKDIR /app
+          COPY app/server.js .
+          EXPOSE 3000
+          CMD ["node", "server.js"]
+          DOCKER
+          cat > fly.toml <<'TOML'
+          app = "placeholder"
+          primary_region = "iad"
+          [build]
+            dockerfile = "Dockerfile"
+          [http_service]
+            internal_port = 3000
+            force_https = true
+            auto_stop_machines = "off"
+            min_machines_running = 1
+          [[vm]]
+            size = "shared-cpu-1x"
+            memory = "512mb"
+          TOML
+          mkdir -p .shannon
+          printf 'exploit: "true"\nreport:\n  sarif: "true"\nrules_of_engagement: |\n  Ephemeral CI runner, no inbound network or out-of-band collaborator. Do not\n  set up out-of-band callbacks or brute-force credentials; confirm from source\n  or mark blocked and move on. Time-box each candidate.\n' > .shannon/scan.yml
+
+      - name: Deploy the clean Node app to a fresh fly app
+        id: deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          APP="shannon-ezl-cleannode-${GITHUB_RUN_ID}"
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
+          echo "url=https://$APP.fly.dev" >> "$GITHUB_OUTPUT"
+          flyctl apps create "$APP" --org "$FLY_ORG"
+          flyctl deploy --remote-only --config fly.toml --app "$APP" --ha=false --yes
+
+      - name: Wait for the deployment to be reachable
+        run: |
+          URL="${{ steps.deploy.outputs.url }}"
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/health" || echo 000)
+            echo "attempt $i: HTTP $code"
+            case "$code" in 2*|3*|4*) echo "reachable"; exit 0 ;; esac
+            sleep 5
+          done
+          echo "target did not become reachable in time"; exit 1
+
+      - name: Shannon scan (ezl-test/shannon-action@v1)
+        uses: ezl-test/shannon-action@v1
+        with:
+          api-key: ${{ secrets.SHANNON_AI_API_KEY }}
+          url: ${{ steps.deploy.outputs.url }}
+          config: .shannon/scan.yml
+          fail-on-severity: high
+
+      - name: Destroy the per-run fly app
+        if: always()
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl apps destroy "${{ steps.deploy.outputs.app }}" --yes || true
