@@ -14,7 +14,8 @@ jobs:
     env:
       FLY_ORG: keygraph-634
     steps:
-      - uses: actions/checkout@v4
+      # No source checkout: the generated app below is the ONLY source Shannon
+      # analyzes, so the deployed binary == the analyzed source (true whitebox).
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Generate a minimal secure Node app + Dockerfile + config
@@ -71,6 +72,9 @@ jobs:
           TOML
           mkdir -p .shannon
           printf 'exploit: "true"\nreport:\n  sarif: "true"\nrules_of_engagement: |\n  Ephemeral CI runner, no inbound network or out-of-band collaborator. Do not\n  set up out-of-band callbacks or brute-force credentials; confirm from source\n  or mark blocked and move on. Time-box each candidate.\n' > .shannon/scan.yml
+          git init -q
+          git -c user.email=ci@keygraph.io -c user.name=shannon-ci add -A
+          git -c user.email=ci@keygraph.io -c user.name=shannon-ci commit -q -m "clean node app (source==binary)"
 
       - name: Deploy the clean Node app to a fresh fly app
         id: deploy
@@ -100,6 +104,7 @@ jobs:
         with:
           api-key: ${{ secrets.SHANNON_AI_API_KEY }}
           url: ${{ steps.deploy.outputs.url }}
+          repo: ${{ github.workspace }}
           config: .shannon/scan.yml
           fail-on-severity: high
 
