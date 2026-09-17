@@ -24,9 +24,13 @@ function loginRateLimited(ip: string): boolean {
 }
 
 function passwordMatches(input: string, expectedHash: string): boolean {
-  const got = crypto.createHash('sha256').update(input).digest('hex');
-  if (got.length !== expectedHash.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expectedHash));
+  const [scheme, saltHex, hashHex] = expectedHash.split('$');
+  if (scheme !== 'scrypt' || !saltHex || !hashHex) return false;
+  const salt = Buffer.from(saltHex, 'hex');
+  const expected = Buffer.from(hashHex, 'hex');
+  const got = crypto.scryptSync(input, salt, expected.length);
+  if (got.length !== expected.length) return false;
+  return crypto.timingSafeEqual(got, expected);
 }
 
 // Reject state-changing cross-site requests: require a same-origin Origin or Referer, and reject
