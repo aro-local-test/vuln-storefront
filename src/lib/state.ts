@@ -39,7 +39,9 @@ export const SITE_SETTINGS: Record<string, unknown> = {
 // committed credential for an attacker to recover.
 function seedPasswordHash(envVar: string): string {
   const password = process.env[envVar] || crypto.randomBytes(24).toString('hex');
-  return crypto.createHash('sha256').update(password).digest('hex');
+  const salt = crypto.randomBytes(16);
+  const derived = crypto.scryptSync(password, salt, 64);
+  return `scrypt$${salt.toString('hex')}$${derived.toString('hex')}`;
 }
 
 export const ACCOUNTS: Record<string, Account> = {
